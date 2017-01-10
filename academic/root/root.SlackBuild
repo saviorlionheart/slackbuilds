@@ -1,50 +1,42 @@
 #!/bin/sh
 
-# Slackware build script for <appname>
+# Slackware build script for ROOT
 
-# Copyright <year> <you> <where you live>
-# All rights reserved.
-#
-# Redistribution and use of this script, with or without modification, is
-# permitted provided that the following conditions are met:
-#
-# 1. Redistributions of this script must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
-#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
-#  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-#  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
-#  OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-#  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-#  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
-#  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# written by Jože Zobec <jozze.zepl@gmail.com>
 
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-PRGNAM=root			# replace with name of program
-VERSION=${VERSION:-master}	# replace with version of program
+# Modified by the slackbuilds.org project
+
+PRGNAM=root
+VERSION=${VERSION:-5.34.36}
 BUILD=${BUILD:-1}
-TAG=${TAG:-_SBo}		# the "_SBo" is required
+TAG=${TAG:-_SBo}
 
-# Automatically determine the architecture we're building on:
 if [ -z "$ARCH" ]; then
   case "$( uname -m )" in
-    i?86) ARCH=i586 ;;
+    i?86) ARCH=i486 ;;
     arm*) ARCH=arm ;;
-# Unless $ARCH is already set, use uname -m for all other archs:
        *) ARCH=$( uname -m ) ;;
   esac
 fi
 
 CWD=$(pwd)
-TMP=${TMP:-/tmp/SBo}		# For consistency's sake, use this
+TMP=${TMP:-/tmp/SBo}
 PKG=$TMP/package-$PRGNAM
-OUTPUT=${OUTPUT:-/tmp}		# Drop the package in /tmp
+OUTPUT=${OUTPUT:-/tmp}
 
-if [ "$ARCH" = "i586" ]; then
-  SLKCFLAGS="-O2 -march=i586 -mtune=i686"
+if [ "$ARCH" = "i486" ]; then
+  SLKCFLAGS="-O2 -march=i486 -mtune=i686"
   LIBDIRSUFFIX=""
 elif [ "$ARCH" = "i686" ]; then
   SLKCFLAGS="-O2 -march=i686 -mtune=i686"
@@ -57,91 +49,116 @@ else
   LIBDIRSUFFIX=""
 fi
 
-set -e # Exit on most errors
+set -e
+
+if [ ${GSL:-yes} = "no" ]; then
+  GSL_FLAGS="--disable-gsl-shared"
+else
+  GSL_FLAGS="--enable-gsl-shared \
+	  --with-gsl-incdir=/usr/include \
+	  --with-gsl-libdir=/usr/lib${LIBDIRSUFFIX}"
+  if [ "$MATHMORE" = "yes" ]; then
+    GSL_FLAGS="$GSL_FLAGS --enable-mathmore"
+  fi
+fi
+
+if [ ${FFTW:-yes} = "no" ]; then
+  FFTW_FLAGS="--disable-fftw3"
+else
+  FFTW_FLAGS="--enable-fftw3 \
+	  --with-fftw3-incdir=/usr/include \
+	  --with-fftw3-libdir=/usr/lib${LIBDIRSUFFIX}"
+fi
+
+if [ ${QT:-no} = "no" ]; then
+	QT_FLAGS="--disable-qt"
+else
+	QT_FLAGS="--enable-qt"
+fi
 
 rm -rf $PKG
 mkdir -p $TMP $PKG $OUTPUT
 cd $TMP
-rm -rf $PRGNAM-$VERSION
-tar xvf $CWD/$PRGNAM-$VERSION.tar.gz
-cd $PRGNAM-$VERSION
+rm -rf $PRGNAM
+tar xvf $CWD/$PRGNAM\_v$VERSION.source.tar.gz
+cd $PRGNAM
 chown -R root:root .
-
-#sed -i -r 's#optimization.h#alglib/optimization.h#' OpenANN/optimization/*
-
 find -L . \
  \( -perm 777 -o -perm 775 -o -perm 750 -o -perm 711 -o -perm 555 \
   -o -perm 511 \) -exec chmod 755 {} \; -o \
  \( -perm 666 -o -perm 664 -o -perm 640 -o -perm 600 -o -perm 444 \
   -o -perm 440 -o -perm 400 \) -exec chmod 644 {} \;
 
-# Your application will probably need different cmake flags; these are only
-# examples.  You might use 'ccmake' to see the available flags...
-mkdir -p build
-cd build
-  cmake \
-    -DCMAKE_C_FLAGS:STRING="$SLKCFLAGS" \
-    -DCMAKE_CXX_FLAGS:STRING="$SLKCFLAGS" \
-    -DROOT_ARCHITECTURE=linux64 \
-    -DCMAKE_CXX_COMPILER=g++ \
-    -Dcxx14=on \
-    -Dhttp=on \
-    -DMAN_INSTALL_DIR=/usr/man \
-    -DCMAKE_BUILD_TYPE=Release ..
-  make -j12
-  cmake -DCMAKE_INSTALL_PREFIX=$PKG/opt/root -P cmake_install.cmake
-  cd ..
+# Make sure we use system libs and headers
+rm -r graf3d/ftgl/{inc,src}
+rm -r graf2d/freetype/src
+rm -r graf3d/glew/{inc,src}
+rm -r core/pcre/src
+LANG=C LC_ALL=C find core/zip -type f -name "[a-z]*" -print0 | xargs -0 rm -f
+rm -r core/lzma/src/*.tar.gz
 
-#    -DCMAKE_INSTALL_PREFIX=/usr \
-#    -DLIB_SUFFIX=${LIBDIRSUFFIX} \
-#    -Dgnuinstall=ON \
+# prefix where to install stuff
+PREFIX=/opt/ROOT
 
-#    -DXROOTD_INCLUDE_DIR=/opt/xrootd/include/xrootd \
-#    -DXROOTD_LIBRARY=/opt/xrootd/lib64/ \
+# Use --with-clang to avoid gcc-5.3 internal compiler error on i586
+CFLAGS="$SLKCFLAGS" \
+CXXFLAGS="$SLKCFLAGS" \
+./configure \
+  --with-clang \
+  --prefix=$PREFIX \
+  --libdir=$PREFIX/lib${LIBDIRSUFFIX} \
+  --incdir=$PREFIX/include \
+  --mandir=$PREFIX/man/man1 \
+  --etcdir=$PREFIX/etc/root \
+  --docdir=/usr/doc/$PRGNAM-$VERSION \
+  --enable-roofit \
+  --enable-unuran \
+  --disable-builtin-freetype \
+  --disable-builtin-ftgl \
+  --disable-builtin-glew \
+  --disable-builtin-pcre \
+  --disable-builtin-zlib \
+  --disable-builtin-lzma \
+  $GSL_FLAGS \
+  $FFTW_FLAGS \
+  $QT_FLAGS \
+  --enable-shared \
+  --build=$ARCH-slackware-linux
 
-    # Strip binaries and libraries - this can be done with 'make install-strip'
-# in many source trees, and that's usually acceptable, if not, use this:
-find $PKG -print0 | xargs -0 file | grep -e "executable" -e "shared object" | grep ELF \
-  | cut -f 1 -d : | xargs strip --strip-unneeded 2> /dev/null || true
+make
+make install DESTDIR=$PKG
 
-# Compress man pages
-# If the man pages are installed to /usr/share/man instead, you'll need to 
-# move them manually.
-#find $PKG/usr/man -type f -exec gzip -9 {} \;
-#for i in $( find $PKG/usr/man -type l ) ; do ln -s $( readlink $i ).gz $i.gz ; rm $i ; done
+# Move some python stuff in the proper place
+PYTHONDIR=$(python -c "import sys, os; print os.path.join('/usr/lib${LIBDIRSUFFIX}', 'python%s' % sys.version[:3], 'site-packages')")/
+mkdir -p $PKG$PYTHONDIR
+mv \
+  $PKG$PREFIX/lib$LIBDIRSUFFIX/*.py \
+  $PKG$PREFIX/lib$LIBDIRSUFFIX/*.pyc \
+  $PKG$PREFIX/lib$LIBDIRSUFFIX/python/genreflex \
+  $PKG$PYTHONDIR
+rm -fr $PKG$PREFIX/lib$LIBDIRSUFFIX/python
 
-# Compress info pages and remove the package's dir file
-# If no info pages are installed by the software, don't leave this in the script
-#rm -f $PKG/usr/info/dir
-#gzip -9 $PKG/usr/info/*.info*
+find $PKG | xargs file | grep -e "executable" -e "shared object" | grep ELF \
+  | cut -f 1 -d : | xargs strip --strip-unneded 2> /dev/null || true
 
-# Remove perllocal.pod and other special files that don't need to be installed,
-# as they will overwrite what's already on the system.  If this is not needed,
-# remove it from the script.
-#find $PKG -name perllocal.pod -o -name ".packlist" -o -name "*.bs" | xargs rm -f || true
+find $PKG$PREFIX/man -type f -exec gzip -9 {} \;
 
-# Copy program documentation into the package
-# The included documentation varies from one application to another, so be sure
-# to adjust your script as needed
-# Also, include the SlackBuild script in the documentation directory
-mkdir -p $PKG/usr/doc/$PRGNAM-$VERSION
-#cp -a \
-#  <documentation> \
-#  $PKG/usr/doc/$PRGNAM-$VERSION
+# Install some profile.d scripts to use the right paths
+mkdir -p $PKG/etc/profile.d
+echo "set path = ( \$path $PREFIX/bin )"       > $PKG/etc/profile.d/root.csh
+echo "setenv MANPATH \${MANPATH}:$PREFIX/man" >> $PKG/etc/profile.d/root.csh
+echo "PATH=\$PATH:$PREFIX/bin"        > $PKG/etc/profile.d/root.sh
+echo "MANPATH=\$MANPATH:$PREFIX/man" >> $PKG/etc/profile.d/root.sh
+chmod +x $PKG/etc/profile.d/root.*
+
 cat $CWD/$PRGNAM.SlackBuild > $PKG/usr/doc/$PRGNAM-$VERSION/$PRGNAM.SlackBuild
 
-# Copy the slack-desc (and a custom doinst.sh if necessary) into ./install
-#mkdir -p $PKG/install
-#cat $CWD/slack-desc > $PKG/install/slack-desc
-#cat $CWD/doinst.sh > $PKG/install/doinst.sh
+mkdir -p $PKG/install
+cat $CWD/slack-desc > $PKG/install/slack-desc
+sed \
+  -e "s|@LIBDIRSUFFIX@|$LIBDIRSUFFIX|" \
+  -e "s|@PREFIX@|$PREFIX|" \
+  $CWD/doinst.sh > $PKG/install/doinst.sh
 
-# Make the package; be sure to leave it in $OUTPUT
-# If package symlinks need to be created during install *before*
-# your custom contents of doinst.sh runs, then add the -p switch to
-# the makepkg command below -- see makepkg(8) for details
 cd $PKG
-
-#mv usr/lib usr/lib64
-#sed -i -r 's#optimization.h#alglib/optimization.h#' usr/include/OpenANN/optimization/*
-
 /sbin/makepkg -l y -c n $OUTPUT/$PRGNAM-$VERSION-$ARCH-$BUILD$TAG.${PKGTYPE:-tgz}
